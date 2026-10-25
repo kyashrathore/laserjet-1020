@@ -55,7 +55,7 @@ else
   curl -fL --retry 3 -o "$work/hp.dmg" "$driver_url"
   [ "$(sha "$work/hp.dmg")" = "$driver_sha" ] || fail "The HP driver download doesn't match the expected file."
   hdiutil attach -quiet -nobrowse -readonly -mountpoint "$work/mnt" "$work/hp.dmg"
-  pkgutil --check-signature "$work/mnt/HewlettPackardPrinterDrivers.pkg" | grep -q "Signed by a certificate trusted by macOS" \
+  pkgutil --check-signature "$work/mnt/HewlettPackardPrinterDrivers.pkg" | grep -q "Status: signed Apple Software" \
     || fail "The HP driver package isn't signed by Apple."
   pkgutil --expand "$work/mnt/HewlettPackardPrinterDrivers.pkg" "$work/expanded"
   hdiutil detach -quiet "$work/mnt"
