@@ -16,6 +16,7 @@ cp "/Library/Printers/hp/laserjet/hplaserjetzjs.bundle/Contents/Resources/HP Las
 codesign --force --sign - "$bundle"
 
 rm -rf "$app"
+mkdir -p "$(dirname "$app")"
 mv "$bundle" "$app"
 mkdir -p "$HOME/Library/PDF Services"
 ln -sfn "$app" "$HOME/Library/PDF Services/Open in LaserJet 1020"

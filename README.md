@@ -7,86 +7,26 @@ A small Mac app for printing PDFs on an HP LaserJet 1020 (or 1020 Plus) over USB
 - Loads the printer's firmware, which the 1020 keeps only in RAM, from the app or automatically when the printer is switched on.
 - Shows the print queue, keeps it to one job, and lets you cancel, resume or see the error of a stuck job.
 
-Requires macOS 14 or later on Apple silicon and the Xcode command line tools (`xcode-select --install`).
+Requires a Mac with Apple silicon on macOS 14 or later.
 
 ## Install
 
-### 1. HP driver
-
-HP never made a 1020 driver for current macOS. Apple's last HP driver package (5.1.1) has the LaserJet 1022 driver, which drives the 1020 once the firmware is loaded. The package refuses to install on macOS newer than 15 and on Apple silicon, so the steps below lift those two checks and repack it (see [What is patched](#what-is-patched)). The driver is Intel code and runs under Rosetta.
+Connect the printer by USB, switch it on, and run this in Terminal:
 
 ```bash
-softwareupdate --install-rosetta --agree-to-license
+curl -fsSL https://raw.githubusercontent.com/kyashrathore/laserjet-1020/main/install.sh | bash
 ```
 
-```bash
-mkdir -p ~/Downloads/laserjet-1020 && cd ~/Downloads/laserjet-1020
-curl -fLO https://updates.cdn-apple.com/2021/macos/071-46903-20211101-0BD2764A-901C-41BA-9573-C17B8FDC4D90/HewlettPackardPrinterDrivers.dmg
-hdiutil attach -nobrowse -readonly -mountpoint mnt HewlettPackardPrinterDrivers.dmg
-pkgutil --expand mnt/HewlettPackardPrinterDrivers.pkg expanded
-hdiutil detach mnt
-sed -i '' -e "s/system.compareVersions(system.version.ProductVersion, '15.0') \&gt; 0/false/" -e 's/hostArchitectures="x86_64"/hostArchitectures="x86_64,arm64"/' expanded/Distribution
-pkgutil --flatten expanded HP-patched.pkg
-```
+It asks for your Mac password once, to install the driver. Run it again at any time to update the app; steps already done are skipped.
 
-Repacking removes Apple's signature, so the installer needs `-allowUntrusted`:
+[`install.sh`](install.sh) does this:
 
-```bash
-sudo installer -pkg ~/Downloads/laserjet-1020/HP-patched.pkg -target / -allowUntrusted
-```
-
-Apple describes the package on [HP Printer Drivers v5.1.1 for macOS](https://support.apple.com/en-us/106385).
-
-### 2. Firmware
-
-The firmware isn't in this repository. It comes from the [foo2zjs](https://foo2zjs.linkevich.net/) project: [sihp1020.tar.gz](https://foo2zjs.linkevich.net/foo2zjs/firmware/sihp1020.tar.gz) holds HP's firmware image, and foo2zjs's `arm2hpdl` (in [foo2zjs.tar.gz](https://foo2zjs.linkevich.net/foo2zjs/foo2zjs.tar.gz)) wraps it into the `sihp1020.dl` file the printer takes. The app reads it from `~/Library/Printers/HP LaserJet 1020/sihp1020.dl`.
-
-```bash
-cd ~/Downloads/laserjet-1020
-curl -fLO https://foo2zjs.linkevich.net/foo2zjs/firmware/sihp1020.tar.gz
-curl -fLO https://foo2zjs.linkevich.net/foo2zjs/foo2zjs.tar.gz
-tar -xzf sihp1020.tar.gz
-tar -xzf foo2zjs.tar.gz foo2zjs/arm2hpdl.c
-cc -O2 -w -o arm2hpdl foo2zjs/arm2hpdl.c
-mkdir -p ~/Library/Printers/"HP LaserJet 1020"
-./arm2hpdl sihp1020.img > ~/Library/Printers/"HP LaserJet 1020"/sihp1020.dl
-```
-
-`shasum -a 256` of the files that work:
-
-```
-ec4665c6704c2db3cfaeb71bb06f1bbc9449c030504b04f533a84bdfae89f966  sihp1020.tar.gz
-133b21fe0cb24bfe53e2eff2f00a82cce4beb970749049661ade7a6801f22663  sihp1020.dl
-```
-
-### 3. Printer queue
-
-Connect the printer by USB and switch it on. Find its address:
-
-```bash
-lpinfo -v | grep -i "laserjet%201020"
-```
-
-Add the queue with that address in place of the one below. The app expects the queue name `HP_LaserJet_1020`.
-
-```bash
-lpadmin -p HP_LaserJet_1020 -D "HP LaserJet 1020" -E -v "usb://Hewlett-Packard/HP%20LaserJet%201020?serial=XXXXXXX" -m "Library/Printers/PPDs/Contents/Resources/HP LaserJet 1022.gz" -o printer-is-shared=false
-```
-
-For A4 paper:
-
-```bash
-lpadmin -p HP_LaserJet_1020 -o PageSize=A4 -o PageRegion=A4
-```
-
-### 4. The app
-
-```bash
-git clone https://github.com/kyashrathore/laserjet-1020.git
-cd laserjet-1020 && ./build.sh
-```
-
-`build.sh` compiles the app, installs it as `~/Applications/LaserJet 1020.app` and adds **Open in LaserJet 1020** to the PDF menu of every Print window. Run it again after pulling changes.
+1. Installs Rosetta if it's missing. If the Xcode command line tools are missing, it opens their installer and stops; run the command again once they're in.
+2. Puts this repository in `~/Library/Printers/HP LaserJet 1020/App`, or updates it there.
+3. **HP driver.** HP never made a 1020 driver for current macOS. Apple's last HP driver package, [HP Printer Drivers 5.1.1](https://support.apple.com/en-us/106385), has the LaserJet 1022 driver, which drives the 1020 once the firmware is loaded. The script downloads it from Apple, checks its checksum and Apple's signature, lifts its two install checks (see [What is patched](#what-is-patched)) and installs it.
+4. **Firmware.** Downloads HP's firmware image, [sihp1020.tar.gz](https://foo2zjs.linkevich.net/foo2zjs/firmware/sihp1020.tar.gz), from the [foo2zjs](https://foo2zjs.linkevich.net/) project, and converts it with foo2zjs's `arm2hpdl` (from [foo2zjs.tar.gz](https://foo2zjs.linkevich.net/foo2zjs/foo2zjs.tar.gz)) into `~/Library/Printers/HP LaserJet 1020/sihp1020.dl`, the file the printer takes. Both the download and the result are checked against known checksums. The firmware isn't in this repository.
+5. **Printer queue.** Finds the printer on USB and adds the print queue `HP_LaserJet_1020` with the LaserJet 1022 driver, on Letter paper in the US, Canada, Mexico and the Philippines and A4 elsewhere.
+6. **App.** Runs [`build.sh`](build.sh), which compiles the app into `~/Applications/LaserJet 1020.app` and adds **Open in LaserJet 1020** to the PDF menu of every Print window.
 
 ## What is patched
 
@@ -108,7 +48,7 @@ The package was marked Intel-only, so Installer refused it on Apple silicon. The
  		return false;
 ```
 
-The package refused macOS newer than 15.0; the check is turned off. Repacking with `pkgutil --flatten` drops Apple's signature, hence `-allowUntrusted`.
+The package refused macOS newer than 15.0; the check is turned off. Repacking with `pkgutil --flatten` drops Apple's signature, so the script installs it with `installer -allowUntrusted`, after checking the signature of the original.
 
 Apple plans to phase out Rosetta, and CUPS already warns that this kind of driver is deprecated, so a future macOS may stop running it.
 
